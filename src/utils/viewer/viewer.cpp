@@ -11,6 +11,11 @@
 #else
 #include <Magnum/Platform/GlfwApplication.h>
 #endif
+#include <Magnum/GL/Buffer.h>
+#include <Magnum/GL/DefaultFramebuffer.h>
+#include <Magnum/GL/PixelFormat.h>
+#include <Magnum/Image.h>
+#include <Magnum/Math/Math.h>
 #include <Magnum/SceneGraph/Camera.h>
 #include <Magnum/Timeline.h>
 
@@ -40,6 +45,7 @@
 #include "esp/sim/Simulator.h"
 
 #include "esp/physics/configure.h"
+#include "esp/physics/bullet/BulletPhysicsManager.h"
 
 constexpr float moveSensitivity = 0.1f;
 constexpr float lookSensitivity = 11.25f;
@@ -66,9 +72,25 @@ class Viewer : public Mn::Platform::Application {
   void keyPressEvent(KeyEvent& event) override;
   void updateRenderCamera();
 
+  Mn::Vector3 unproject(const Mn::Vector2i& windowPosition,
+                            float depth) const;
+  float depthAt(const Mn::Vector2i& windowPosition);
+
+  esp::scene::SceneNode* crossHairNode_ = nullptr;
+
   // Interactive functions
   void addObject(const std::string& configHandle);
   void addObject(int objID);
+  
+  bool placeObject(int objectId, int maxAttempts = 1000);
+
+  int agentObjectId = -1;
+
+  void grabReleaseObject();
+  void grabReleaseObjectUsingCrossHair();
+  void grabReleaseObject(int id);
+  void syncGrippedObjects();
+  void syncGrippedObject();
 
   // add template-derived object
   void addTemplateObject();
@@ -89,6 +111,8 @@ class Viewer : public Mn::Platform::Application {
   Mn::Vector3 randomDirection();
 
   void toggleNavMeshVisualization();
+
+  int findNearestObject();
 
   // single inline for logging agent state msgs, so can be easily modified
   inline void logAgentStateMsg(bool showPos, bool showOrient) {
@@ -380,6 +404,318 @@ void Viewer::removeLastObject() {
   objectIDs_.pop_back();
 }
 
+float Viewer::depthAt(const Mn::Vector2i& windowPosition) {
+  /* First scale the position from being relative to window size to being
+     relative to framebuffer size as those two can be different on HiDPI
+     systems */
+  const Mn::Vector2i position =
+      windowPosition * Mn::Vector2{framebufferSize()} / Mn::Vector2{windowSize()};
+  const Mn::Vector2i fbPosition{
+      position.x(),
+      Mn::GL::defaultFramebuffer.viewport().sizeY() - position.y() - 1};
+
+  Mn::GL::defaultFramebuffer.mapForRead(
+      Mn::GL::DefaultFramebuffer::ReadAttachment::Front);
+  Magnum::Image2D data = Mn::GL::defaultFramebuffer.read(
+      Mn::Range2Di::fromSize(fbPosition, Mn::Vector2i{1}).padded(Mn::Vector2i{2}),
+      {Magnum::GL::PixelFormat::DepthComponent, Magnum::GL::PixelType::Float});
+
+  // Corrade::Utility::Debug() << "data: " << data.data();
+
+  // fix efficiency here:
+  float min = data.data()[0];
+  for (auto d : data.data()) {
+    if (d < min) {
+      min = d;
+    }
+  }
+  return min;
+
+  // return Magnum::Math::min<Float>(Containers::arrayCast<const
+  // Float>(data.data()));
+}
+
+Mn::Vector3 Viewer::unproject(const Mn::Vector2i& windowPosition,
+                                  float depth) const {
+  /* We have to take window size, not framebuffer size, since the position is
+     in window coordinates and the two can be different on HiDPI systems */
+  // Read this: http://antongerdelan.net/opengl/raycasting.html
+
+  const Mn::Vector2i viewSize = windowSize();
+  const Mn::Vector2i viewPosition{windowPosition.x(),
+                                      viewSize.y() - windowPosition.y() - 1};
+  const Mn::Vector3 in{
+      2 * Mn::Vector2{viewPosition} / Mn::Vector2{viewSize} -
+          Mn::Vector2{1.0f},
+      1.0 * 2.0f - 1.0f};
+
+  // global
+  return (renderCamera_->node().absoluteTransformationMatrix() *
+          renderCamera_->projectionMatrix().inverted())
+      .transformPoint(in);
+  // camera local
+  // return renderCamera_->projectionMatrix().inverted().transformPoint(in);
+}
+
+// place an object from a navigable point with random Y rotation and no contact
+// with scene or other objects
+bool Viewer::placeObject(int objectId, int maxAttempts) {
+  Magnum::Matrix4 originalTransformation =
+      physicsManager_->getTransformation(objectId);
+  Mn::Vector3 potentialPoint;
+  // displace by half-extent plus collision margin
+  Mn::Vector3 objectVerticalDisplacement(
+      0,
+      physicsManager_->getObjectSceneNode(objectId).getCumulativeBB().sizeY() /
+              2.0 +
+          physicsManager_->getInitializationAttributes(objectId)->getMargin(),
+      0);
+  bool validPlacement = false;
+
+  // rejection sample for a placement
+  int attempt = 1;
+  while (/*!validPlacement || */attempt > maxAttempts) {
+    // draw a navigable point from the NavMesh
+    potentialPoint = Mn::Vector3(pathfinder_->getRandomNavigablePoint());
+    // filter points that may be on the roof (TODO: this is a hack and islands
+    // may be better).
+    if (potentialPoint[1] > 1.0)
+      continue;
+    // try placing the object
+    physicsManager_->setTranslation(
+        objectId, potentialPoint + objectVerticalDisplacement);
+    float randAngle = ((rand() % 1000) / 1000.0) * M_PI * 2.0;
+    // Magnum::Matrix4 randRotation =
+    //     Magnum::Matrix4::rotationY(Magnum::Math::Rad<float>(randAngle));
+    // physicsManager_->setRotation(
+    //     objectId, Magnum::Quaternion::fromMatrix(randRotation.rotation()));
+
+    // test contact
+    validPlacement = !physicsManager_->contactTest(objectId);
+    attempt++;
+  }
+  if (true || !validPlacement) {
+    // physicsManager_->setTransformation(objectId, originalTransformation);
+    Corrade::Utility::Debug()
+        << "Viewer::placeObject found NO VALID PLACEMENT in " << attempt
+        << "attempts. Resetting the object.";
+  } else {
+    Corrade::Utility::Debug()
+        << "Viewer::placeObject found a valid placement in " << attempt
+        << "attempts.";
+  }
+  return validPlacement;
+}
+
+Magnum::Matrix4 gripOffset;
+int grippedObjectId = -1;
+
+void Viewer::grabReleaseObject() {
+  int nearestObjId = findNearestObject();
+  if (grippedObjectId != -1) {
+    // already gripped, so let it go
+    Magnum::Matrix4 agentT =
+        agentBodyNode_->MagnumObject::transformationMatrix();
+    physicsManager_->setTransformation(
+        grippedObjectId, agentT * gripOffset);
+
+
+   Mn::Vector3 position = physicsManager_->getTranslation(grippedObjectId);
+    bool isNav = pathfinder_->isNavigable(Eigen::Map<esp::vec3f>(position.data()));
+
+    //check for collision (apparently this is always true)
+    if (
+      //(physicsManager_->contactTest(grippedObjectId)) && 
+      (!isNav)) {
+      LOG(INFO) << "Colliding with object or position is not navigable";
+      return;
+    }
+    
+    physicsManager_->setObjectMotionType(grippedObjectId,
+        esp::physics::MotionType::STATIC);
+    physicsManager_->setActive(agentObjectId, true);
+    grippedObjectId = -1;
+  } else if (nearestObjId != -1) {
+    // not gripped, so grip it
+    Magnum::Matrix4 agentT =
+        agentBodyNode_->MagnumObject::transformationMatrix();
+    // gripOffset =
+    // agentT.inverted().transformPoint(physicsManager_->getTranslation(objectIDs_.back()));
+    gripOffset = agentT.inverted() *
+                  physicsManager_->getObjectSceneNode(nearestObjId)
+                      .transformation();
+    physicsManager_->setObjectMotionType(nearestObjId,
+                                          esp::physics::MotionType::KINEMATIC);
+    grippedObjectId = nearestObjId;
+  }
+
+  esp::nav::NavMeshSettings navMeshSettings;
+  navMeshSettings.setDefaults();
+  navMeshSettings.agentRadius = 0.3f;
+
+  recomputeNavMesh(sceneFileName, navMeshSettings);
+  toggleNavMeshVisualization();
+  toggleNavMeshVisualization();
+}
+
+std::map<int, Magnum::Matrix4> gripOffsets;
+
+void Viewer::grabReleaseObject(int id) {
+  if (objectIDs_.size() > 0) {
+    if (physicsManager_->getObjectMotionType(id) ==
+        esp::physics::MotionType::KINEMATIC) {
+      // already gripped, so let it go
+      physicsManager_->setObjectMotionType(id, esp::physics::MotionType::STATIC);
+      gripOffsets.erase(id);
+    } else {
+      // not gripped, so grip it
+      Magnum::Matrix4 agentT =
+          agentBodyNode_->MagnumObject::transformationMatrix();
+      // gripOffset =
+      // agentT.inverted().transformPoint(physicsManager_->getTranslation(objectIDs_.back()));
+      gripOffsets[id] =
+          agentT.inverted() *
+          physicsManager_->getObjectSceneNode(id).transformation();
+      physicsManager_->setObjectMotionType(id, esp::physics::MotionType::KINEMATIC);
+    }
+  }
+  esp::nav::NavMeshSettings navMeshSettings;
+  navMeshSettings.setDefaults();
+  navMeshSettings.agentRadius = 0.3f;
+
+  recomputeNavMesh(sceneFileName, navMeshSettings);
+  toggleNavMeshVisualization();
+  toggleNavMeshVisualization();
+}
+
+void Viewer::grabReleaseObjectUsingCrossHair() {
+  float best_fraction = 99999.0;
+  int nearestObjId = esp::ID_UNDEFINED;
+  Mn::Vector2i crossHairPos = Mn::Vector2i{windowSize() * 0.5};
+  float depth = depthAt(crossHairPos);
+  Corrade::Utility::Debug()
+        << " depth: " << depth;
+  Mn::Vector3 point = unproject(crossHairPos, 1.0);
+
+  // try a ray test
+  esp::physics::BulletPhysicsManager* bpm =
+      static_cast<esp::physics::BulletPhysicsManager*>(physicsManager_.get());
+  Mn::Vector3 cast =
+      (point - renderCamera_->node().absoluteTranslation()).normalized();
+  btCollisionWorld::AllHitsRayResultCallback hit =
+      bpm->castRay(renderCamera_->node().absoluteTranslation(), cast);
+  Mn::Vector3 hitPoint;
+
+  for (int hitIx = 0; hitIx < hit.m_hitPointWorld.size(); hitIx++) {
+    Corrade::Utility::Debug()
+        << " hit fraction: " << hit.m_hitFractions.at(hitIx);
+    if (hit.m_hitFractions.at(hitIx) < best_fraction) {
+      best_fraction = hit.m_hitFractions.at(hitIx);
+      
+      nearestObjId = bpm->getObjectIDFromCollisionObject(
+          hit.m_collisionObjects.at(hitIx));
+      hitPoint = Mn::Vector3{hit.m_hitPointWorld.at(hitIx)};
+    }
+  }
+  Corrade::Utility::Debug() << " hitID = " << nearestObjId;
+    
+  if (grippedObjectId != -1) {
+    // already gripped, so let it go
+    Magnum::Matrix4 agentT =
+        agentBodyNode_->MagnumObject::transformationMatrix();
+    physicsManager_->setTransformation(
+        grippedObjectId, agentT * gripOffset);
+
+
+   Mn::Vector3 position = physicsManager_->getTranslation(grippedObjectId);
+    bool isNav = pathfinder_->isNavigable(Eigen::Map<esp::vec3f>(position.data()));
+
+    //check for collision (apparently this is always true)
+    if (
+      //(physicsManager_->contactTest(grippedObjectId)) && 
+      (!isNav)) {
+      LOG(INFO) << "Colliding with object or position is not navigable";
+      return;
+    }
+    
+    physicsManager_->setObjectMotionType(grippedObjectId,
+        esp::physics::MotionType::STATIC);
+    //physicsManager_->setActive(agentObjectId, true);
+    grippedObjectId = -1;
+  } else if (nearestObjId != -1) {
+    Corrade::Utility::Debug()
+        << "object select distance = "
+        << (hitPoint - agentBodyNode_->absoluteTranslation()).length();
+    if ((hitPoint - agentBodyNode_->absoluteTranslation()).length() < 1.0) {
+      // not gripped, so grip it
+      Magnum::Matrix4 agentT =
+          agentBodyNode_->MagnumObject::transformationMatrix();
+      gripOffset = agentT.inverted() *
+          physicsManager_->getObjectSceneNode(nearestObjId)
+          .transformation();
+      physicsManager_->setObjectMotionType(nearestObjId,
+          esp::physics::MotionType::KINEMATIC);
+      grippedObjectId = nearestObjId;
+    }
+  }
+
+  esp::nav::NavMeshSettings navMeshSettings;
+  navMeshSettings.setDefaults();
+  navMeshSettings.agentRadius = 0.3f;
+
+  recomputeNavMesh(sceneFileName, navMeshSettings);
+  toggleNavMeshVisualization();
+  toggleNavMeshVisualization();
+}
+
+void Viewer::syncGrippedObject() {
+  if (grippedObjectId != -1) {
+      Magnum::Matrix4 agentT =
+          agentBodyNode_->MagnumObject::transformationMatrix();
+      //physicsManager_->setTransformation(grippedObjectId, agentT * gripOffset);
+      physicsManager_->setTranslation(
+        grippedObjectId, agentT.transformPoint(Mn::Vector3{0.0, 0.0, 0.0}));
+  }
+}
+
+void Viewer::syncGrippedObjects() {
+  Magnum::Matrix4 agentT = agentBodyNode_->MagnumObject::transformationMatrix();
+  for (auto& grip : gripOffsets) {
+    physicsManager_->setTransformation(grip.first, agentT * grip.second);
+  }
+}
+
+int Viewer::findNearestObject() { 
+  if (agentObjectId >= 0) {
+    Mn::Vector3 agentPosition = 
+        physicsManager_->getTranslation(agentObjectId);
+    Mn::Vector2 agentPos_xz(agentPosition.x(), agentPosition.z());
+
+    float minDist = 1.0;
+    int nearestObjId = -1;
+    
+    for(int objectId : physicsManager_->getExistingObjectIDs()) {
+      if (objectId != agentObjectId) {
+        Mn::Vector3 objPosition = physicsManager_->getTranslation(objectId);
+        Mn::Vector2 objPos_xz(objPosition.x(), objPosition.z());
+        
+        float d = Mn::Vector2(agentPos_xz - objPos_xz).length();
+        
+        // float ax = agentPosition[0] - objPosition[0];
+        // float az = agentPosition[2] - objPosition[2];
+        // float d = ax*ax + az*az;
+        
+        if (d <= minDist) {
+          minDist = d;
+          nearestObjId = objectId;
+        }
+      }
+    }
+    LOG(INFO) << "Nearest Dist: " << minDist << " Obj: " << nearestObjId;
+    return nearestObjId;
+  }
+}
+
 void Viewer::invertGravity() {
   const Mn::Vector3& gravity = physicsManager_->getGravity();
   const Mn::Vector3 invGravity = -1 * gravity;
@@ -488,6 +824,24 @@ void Viewer::drawEvent() {
                                    Mn::GL::FramebufferClear::Depth);
   if (sceneID_.size() <= 0)
     return;
+  
+  if (crossHairNode_ == nullptr) {
+    crossHairNode_ = &rootNode_->createChild();
+    resourceManager_.addPrimitiveToDrawables(0, *crossHairNode_,
+                                              &sceneGraph_->getDrawables());
+    crossHairNode_->setScaling({0.03, 0.03, 0.03});
+  }
+
+  Mn::Vector2i crossHairPos = Mn::Vector2i{windowSize() * 0.5};
+  float depth = depthAt(crossHairPos);
+  Mn::Vector3 point = unproject(crossHairPos, depth);
+  Mn::Vector3 cast =
+      (point - renderCamera_->node().absoluteTranslation()).normalized();
+  crossHairNode_->setTranslation(renderCamera_->node().absoluteTranslation() +
+                              cast * 1.0);
+
+  syncGrippedObject();
+  syncGrippedObjects();
 
   // step physics at a fixed rate
   timeSinceLastSimulation += timeline_.previousFrameDuration();
@@ -754,6 +1108,9 @@ void Viewer::keyPressEvent(KeyEvent& event) {
                                          drawObjectBBs);
       }
     } break;
+    case KeyEvent::Key::H:
+      grabReleaseObjectUsingCrossHair();
+      break;
     default:
       break;
   }
