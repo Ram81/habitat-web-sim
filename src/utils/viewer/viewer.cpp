@@ -404,36 +404,36 @@ void Viewer::removeLastObject() {
   objectIDs_.pop_back();
 }
 
-float Viewer::depthAt(const Mn::Vector2i& windowPosition) {
-  /* First scale the position from being relative to window size to being
-     relative to framebuffer size as those two can be different on HiDPI
-     systems */
-  const Mn::Vector2i position =
-      windowPosition * Mn::Vector2{framebufferSize()} / Mn::Vector2{windowSize()};
-  const Mn::Vector2i fbPosition{
-      position.x(),
-      Mn::GL::defaultFramebuffer.viewport().sizeY() - position.y() - 1};
+// float Viewer::depthAt(const Mn::Vector2i& windowPosition) {
+//   /* First scale the position from being relative to window size to being
+//      relative to framebuffer size as those two can be different on HiDPI
+//      systems */
+//   const Mn::Vector2i position =
+//       windowPosition * Mn::Vector2{framebufferSize()} / Mn::Vector2{windowSize()};
+//   const Mn::Vector2i fbPosition{
+//       position.x(),
+//       Mn::GL::defaultFramebuffer.viewport().sizeY() - position.y() - 1};
 
-  Mn::GL::defaultFramebuffer.mapForRead(
-      Mn::GL::DefaultFramebuffer::ReadAttachment::Front);
-  Magnum::Image2D data = Mn::GL::defaultFramebuffer.read(
-      Mn::Range2Di::fromSize(fbPosition, Mn::Vector2i{1}).padded(Mn::Vector2i{2}),
-      {Magnum::GL::PixelFormat::DepthComponent, Magnum::GL::PixelType::Float});
+//   Mn::GL::defaultFramebuffer.mapForRead(
+//       Mn::GL::DefaultFramebuffer::ReadAttachment::Front);
+//   Magnum::Image2D data = Mn::GL::defaultFramebuffer.read(
+//       Mn::Range2Di::fromSize(fbPosition, Mn::Vector2i{1}).padded(Mn::Vector2i{2}),
+//       {Magnum::GL::PixelFormat::DepthComponent, Magnum::GL::PixelType::Float});
 
-  // Corrade::Utility::Debug() << "data: " << data.data();
+//   // Corrade::Utility::Debug() << "data: " << data.data();
 
-  // fix efficiency here:
-  float min = data.data()[0];
-  for (auto d : data.data()) {
-    if (d < min) {
-      min = d;
-    }
-  }
-  return min;
+//   // fix efficiency here:
+//   float min = data.data()[0];
+//   for (auto d : data.data()) {
+//     if (d < min) {
+//       min = d;
+//     }
+//   }
+//   return min;
 
-  // return Magnum::Math::min<Float>(Containers::arrayCast<const
-  // Float>(data.data()));
-}
+//   // return Magnum::Math::min<Float>(Containers::arrayCast<const
+//   // Float>(data.data()));
+// }
 
 Mn::Vector3 Viewer::unproject(const Mn::Vector2i& windowPosition,
                                   float depth) const {
@@ -592,9 +592,9 @@ void Viewer::grabReleaseObjectUsingCrossHair() {
   float best_fraction = 99999.0;
   int nearestObjId = esp::ID_UNDEFINED;
   Mn::Vector2i crossHairPos = Mn::Vector2i{windowSize() * 0.5};
-  float depth = depthAt(crossHairPos);
-  Corrade::Utility::Debug()
-        << " depth: " << depth;
+  // float depth = depthAt(crossHairPos);
+  // Corrade::Utility::Debug()
+  //       << " depth: " << depth;
   Mn::Vector3 point = unproject(crossHairPos, 1.0);
 
   // try a ray test
@@ -833,8 +833,8 @@ void Viewer::drawEvent() {
   }
 
   Mn::Vector2i crossHairPos = Mn::Vector2i{windowSize() * 0.5};
-  float depth = depthAt(crossHairPos);
-  Mn::Vector3 point = unproject(crossHairPos, depth);
+  // float depth = depthAt(crossHairPos);
+  Mn::Vector3 point = unproject(crossHairPos, 1.0);
   Mn::Vector3 cast =
       (point - renderCamera_->node().absoluteTranslation()).normalized();
   crossHairNode_->setTranslation(renderCamera_->node().absoluteTranslation() +
