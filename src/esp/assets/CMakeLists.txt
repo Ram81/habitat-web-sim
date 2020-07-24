@@ -23,7 +23,7 @@ set(assets_SOURCES
   managers/PhysicsAttributesManager.cpp
   managers/SceneAttributesManager.h
   managers/SceneAttributesManager.cpp
-  
+
   ResourceManager.cpp
   ResourceManager.h
 

@@ -44,8 +44,8 @@
 #include "esp/scene/SceneConfiguration.h"
 #include "esp/sim/Simulator.h"
 
-#include "esp/physics/configure.h"
 #include "esp/physics/bullet/BulletPhysicsManager.h"
+#include "esp/physics/configure.h"
 
 constexpr float moveSensitivity = 0.1f;
 constexpr float lookSensitivity = 11.25f;
@@ -72,9 +72,7 @@ class Viewer : public Mn::Platform::Application {
   void keyPressEvent(KeyEvent& event) override;
   void updateRenderCamera();
 
-  Mn::Vector3 unproject(const Mn::Vector2i& windowPosition,
-                            float depth) const;
-  float depthAt(const Mn::Vector2i& windowPosition);
+  Mn::Vector3 unproject(const Mn::Vector2i& windowPosition, float depth) const;
 
   esp::scene::SceneNode* crossHairNode_ = nullptr;
 
@@ -402,49 +400,17 @@ void Viewer::removeLastObject() {
   objectIDs_.pop_back();
 }
 
-// float Viewer::depthAt(const Mn::Vector2i& windowPosition) {
-//   /* First scale the position from being relative to window size to being
-//      relative to framebuffer size as those two can be different on HiDPI
-//      systems */
-//   const Mn::Vector2i position =
-//       windowPosition * Mn::Vector2{framebufferSize()} / Mn::Vector2{windowSize()};
-//   const Mn::Vector2i fbPosition{
-//       position.x(),
-//       Mn::GL::defaultFramebuffer.viewport().sizeY() - position.y() - 1};
-
-//   Mn::GL::defaultFramebuffer.mapForRead(
-//       Mn::GL::DefaultFramebuffer::ReadAttachment::Front);
-//   Magnum::Image2D data = Mn::GL::defaultFramebuffer.read(
-//       Mn::Range2Di::fromSize(fbPosition, Mn::Vector2i{1}).padded(Mn::Vector2i{2}),
-//       {Magnum::GL::PixelFormat::DepthComponent, Magnum::GL::PixelType::Float});
-
-//   // Corrade::Utility::Debug() << "data: " << data.data();
-
-//   // fix efficiency here:
-//   float min = data.data()[0];
-//   for (auto d : data.data()) {
-//     if (d < min) {
-//       min = d;
-//     }
-//   }
-//   return min;
-
-//   // return Magnum::Math::min<Float>(Containers::arrayCast<const
-//   // Float>(data.data()));
-// }
-
 Mn::Vector3 Viewer::unproject(const Mn::Vector2i& windowPosition,
-                                  float depth) const {
+                              float depth) const {
   /* We have to take window size, not framebuffer size, since the position is
      in window coordinates and the two can be different on HiDPI systems */
   // Read this: http://antongerdelan.net/opengl/raycasting.html
 
   const Mn::Vector2i viewSize = windowSize();
   const Mn::Vector2i viewPosition{windowPosition.x(),
-                                      viewSize.y() - windowPosition.y() - 1};
+                                  viewSize.y() - windowPosition.y() - 1};
   const Mn::Vector3 in{
-      2 * Mn::Vector2{viewPosition} / Mn::Vector2{viewSize} -
-          Mn::Vector2{1.0f},
+      2 * Mn::Vector2{viewPosition} / Mn::Vector2{viewSize} - Mn::Vector2{1.0f},
       1.0 * 2.0f - 1.0f};
 
   // global
@@ -464,24 +430,23 @@ void Viewer::grabReleaseObject() {
     // already gripped, so let it go
     Magnum::Matrix4 agentT =
         agentBodyNode_->MagnumObject::transformationMatrix();
-    physicsManager_->setTransformation(
-        grippedObjectId, agentT * gripOffset);
+    physicsManager_->setTransformation(grippedObjectId, agentT * gripOffset);
 
+    Mn::Vector3 position = physicsManager_->getTranslation(grippedObjectId);
+    bool isNav =
+        pathfinder_->isNavigable(Eigen::Map<esp::vec3f>(position.data()));
 
-   Mn::Vector3 position = physicsManager_->getTranslation(grippedObjectId);
-    bool isNav = pathfinder_->isNavigable(Eigen::Map<esp::vec3f>(position.data()));
-
-    //check for collision (apparently this is always true)
+    // check for collision (apparently this is always true)
     if (
-      //(physicsManager_->contactTest(grippedObjectId)) && 
-      (!isNav)) {
+        //(physicsManager_->contactTest(grippedObjectId)) &&
+        (!isNav)) {
       LOG(INFO) << "Colliding with object or position is not navigable";
       return;
     }
-    
+
     physicsManager_->setObjectMotionType(grippedObjectId,
-        esp::physics::MotionType::STATIC);
-    //physicsManager_->setActive(agentObjectId, true);
+                                         esp::physics::MotionType::STATIC);
+    // physicsManager_->setActive(agentObjectId, true);
     grippedObjectId = -1;
   } else if (nearestObjId != -1) {
     // not gripped, so grip it
@@ -489,11 +454,11 @@ void Viewer::grabReleaseObject() {
         agentBodyNode_->MagnumObject::transformationMatrix();
     // gripOffset =
     // agentT.inverted().transformPoint(physicsManager_->getTranslation(objectIDs_.back()));
-    gripOffset = agentT.inverted() *
-                  physicsManager_->getObjectSceneNode(nearestObjId)
-                      .transformation();
+    gripOffset =
+        agentT.inverted() *
+        physicsManager_->getObjectSceneNode(nearestObjId).transformation();
     physicsManager_->setObjectMotionType(nearestObjId,
-                                          esp::physics::MotionType::KINEMATIC);
+                                         esp::physics::MotionType::KINEMATIC);
     grippedObjectId = nearestObjId;
   }
 
@@ -502,8 +467,6 @@ void Viewer::grabReleaseObject() {
   navMeshSettings.agentRadius = 0.3f;
 
   recomputeNavMesh(sceneFileName, navMeshSettings);
-  toggleNavMeshVisualization();
-  toggleNavMeshVisualization();
 }
 
 std::map<int, Magnum::Matrix4> gripOffsets;
@@ -513,7 +476,8 @@ void Viewer::grabReleaseObject(int id) {
     if (physicsManager_->getObjectMotionType(id) ==
         esp::physics::MotionType::KINEMATIC) {
       // already gripped, so let it go
-      physicsManager_->setObjectMotionType(id, esp::physics::MotionType::STATIC);
+      physicsManager_->setObjectMotionType(id,
+                                           esp::physics::MotionType::STATIC);
       gripOffsets.erase(id);
     } else {
       // not gripped, so grip it
@@ -524,7 +488,8 @@ void Viewer::grabReleaseObject(int id) {
       gripOffsets[id] =
           agentT.inverted() *
           physicsManager_->getObjectSceneNode(id).transformation();
-      physicsManager_->setObjectMotionType(id, esp::physics::MotionType::KINEMATIC);
+      physicsManager_->setObjectMotionType(id,
+                                           esp::physics::MotionType::KINEMATIC);
     }
   }
   esp::nav::NavMeshSettings navMeshSettings;
@@ -540,9 +505,6 @@ void Viewer::grabReleaseObjectUsingCrossHair() {
   float best_fraction = 99999.0;
   int nearestObjId = esp::ID_UNDEFINED;
   Mn::Vector2i crossHairPos = Mn::Vector2i{windowSize() * 0.5};
-  // float depth = depthAt(crossHairPos);
-  // Corrade::Utility::Debug()
-  //       << " depth: " << depth;
   Mn::Vector3 point = unproject(crossHairPos, 1.0);
 
   // try a ray test
@@ -559,36 +521,35 @@ void Viewer::grabReleaseObjectUsingCrossHair() {
         << " hit fraction: " << hit.m_hitFractions.at(hitIx);
     if (hit.m_hitFractions.at(hitIx) < best_fraction) {
       best_fraction = hit.m_hitFractions.at(hitIx);
-      
-      nearestObjId = bpm->getObjectIDFromCollisionObject(
-          hit.m_collisionObjects.at(hitIx));
+
+      nearestObjId =
+          bpm->getObjectIDFromCollisionObject(hit.m_collisionObjects.at(hitIx));
       hitPoint = Mn::Vector3{hit.m_hitPointWorld.at(hitIx)};
     }
   }
   Corrade::Utility::Debug() << " hitID = " << nearestObjId;
-    
+
   if (grippedObjectId != -1) {
     // already gripped, so let it go
     Magnum::Matrix4 agentT =
         agentBodyNode_->MagnumObject::transformationMatrix();
-    physicsManager_->setTransformation(
-        grippedObjectId, agentT * gripOffset);
+    physicsManager_->setTransformation(grippedObjectId, agentT * gripOffset);
 
+    Mn::Vector3 position = physicsManager_->getTranslation(grippedObjectId);
+    bool isNav =
+        pathfinder_->isNavigable(Eigen::Map<esp::vec3f>(position.data()));
 
-   Mn::Vector3 position = physicsManager_->getTranslation(grippedObjectId);
-    bool isNav = pathfinder_->isNavigable(Eigen::Map<esp::vec3f>(position.data()));
-
-    //check for collision (apparently this is always true)
+    // check for collision (apparently this is always true)
     if (
-      //(physicsManager_->contactTest(grippedObjectId)) && 
-      (!isNav)) {
+        //(physicsManager_->contactTest(grippedObjectId)) &&
+        (!isNav)) {
       LOG(INFO) << "Colliding with object or position is not navigable";
       return;
     }
-    
+
     physicsManager_->setObjectMotionType(grippedObjectId,
-        esp::physics::MotionType::STATIC);
-    //physicsManager_->setActive(agentObjectId, true);
+                                         esp::physics::MotionType::STATIC);
+    // physicsManager_->setActive(agentObjectId, true);
     grippedObjectId = -1;
   } else if (nearestObjId != -1) {
     Corrade::Utility::Debug()
@@ -598,11 +559,11 @@ void Viewer::grabReleaseObjectUsingCrossHair() {
       // not gripped, so grip it
       Magnum::Matrix4 agentT =
           agentBodyNode_->MagnumObject::transformationMatrix();
-      gripOffset = agentT.inverted() *
-          physicsManager_->getObjectSceneNode(nearestObjId)
-          .transformation();
+      gripOffset =
+          agentT.inverted() *
+          physicsManager_->getObjectSceneNode(nearestObjId).transformation();
       physicsManager_->setObjectMotionType(nearestObjId,
-          esp::physics::MotionType::KINEMATIC);
+                                           esp::physics::MotionType::KINEMATIC);
       grippedObjectId = nearestObjId;
     }
   }
@@ -618,10 +579,10 @@ void Viewer::grabReleaseObjectUsingCrossHair() {
 
 void Viewer::syncGrippedObject() {
   if (grippedObjectId != -1) {
-      Magnum::Matrix4 agentT =
-          agentBodyNode_->MagnumObject::transformationMatrix();
-      //physicsManager_->setTransformation(grippedObjectId, agentT * gripOffset);
-      physicsManager_->setTranslation(
+    Magnum::Matrix4 agentT =
+        agentBodyNode_->MagnumObject::transformationMatrix();
+    // physicsManager_->setTransformation(grippedObjectId, agentT * gripOffset);
+    physicsManager_->setTranslation(
         grippedObjectId, agentT.transformPoint(Mn::Vector3{0.0, 0.0, 0.0}));
   }
 }
@@ -633,26 +594,25 @@ void Viewer::syncGrippedObjects() {
   }
 }
 
-int Viewer::findNearestObject() { 
+int Viewer::findNearestObject() {
   if (agentObjectId >= 0) {
-    Mn::Vector3 agentPosition = 
-        physicsManager_->getTranslation(agentObjectId);
+    Mn::Vector3 agentPosition = physicsManager_->getTranslation(agentObjectId);
     Mn::Vector2 agentPos_xz(agentPosition.x(), agentPosition.z());
 
     float minDist = 1.0;
     int nearestObjId = -1;
-    
-    for(int objectId : physicsManager_->getExistingObjectIDs()) {
+
+    for (int objectId : physicsManager_->getExistingObjectIDs()) {
       if (objectId != agentObjectId) {
         Mn::Vector3 objPosition = physicsManager_->getTranslation(objectId);
         Mn::Vector2 objPos_xz(objPosition.x(), objPosition.z());
-        
+
         float d = Mn::Vector2(agentPos_xz - objPos_xz).length();
-        
+
         // float ax = agentPosition[0] - objPosition[0];
         // float az = agentPosition[2] - objPosition[2];
         // float d = ax*ax + az*az;
-        
+
         if (d <= minDist) {
           minDist = d;
           nearestObjId = objectId;
@@ -772,21 +732,20 @@ void Viewer::drawEvent() {
                                    Mn::GL::FramebufferClear::Depth);
   if (sceneID_.size() <= 0)
     return;
-  
+
   if (crossHairNode_ == nullptr) {
     crossHairNode_ = &rootNode_->createChild();
     resourceManager_.addPrimitiveToDrawables(0, *crossHairNode_,
-                                              &sceneGraph_->getDrawables());
+                                             &sceneGraph_->getDrawables());
     crossHairNode_->setScaling({0.03, 0.03, 0.03});
   }
 
   Mn::Vector2i crossHairPos = Mn::Vector2i{windowSize() * 0.5};
-  // float depth = depthAt(crossHairPos);
   Mn::Vector3 point = unproject(crossHairPos, 1.0);
   Mn::Vector3 cast =
       (point - renderCamera_->node().absoluteTranslation()).normalized();
   crossHairNode_->setTranslation(renderCamera_->node().absoluteTranslation() +
-                              cast * 1.0);
+                                 cast * 1.0);
 
   syncGrippedObject();
   syncGrippedObjects();
