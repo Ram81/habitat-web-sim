@@ -81,8 +81,6 @@ class Viewer : public Mn::Platform::Application {
   // Interactive functions
   void addObject(const std::string& configHandle);
   void addObject(int objID);
-  
-  bool placeObject(int objectId, int maxAttempts = 1000);
 
   int agentObjectId = -1;
 
@@ -457,56 +455,6 @@ Mn::Vector3 Viewer::unproject(const Mn::Vector2i& windowPosition,
   // return renderCamera_->projectionMatrix().inverted().transformPoint(in);
 }
 
-// place an object from a navigable point with random Y rotation and no contact
-// with scene or other objects
-bool Viewer::placeObject(int objectId, int maxAttempts) {
-  Magnum::Matrix4 originalTransformation =
-      physicsManager_->getTransformation(objectId);
-  Mn::Vector3 potentialPoint;
-  // displace by half-extent plus collision margin
-  Mn::Vector3 objectVerticalDisplacement(
-      0,
-      physicsManager_->getObjectSceneNode(objectId).getCumulativeBB().sizeY() /
-              2.0 +
-          physicsManager_->getInitializationAttributes(objectId)->getMargin(),
-      0);
-  bool validPlacement = false;
-
-  // rejection sample for a placement
-  int attempt = 1;
-  while (/*!validPlacement || */attempt > maxAttempts) {
-    // draw a navigable point from the NavMesh
-    potentialPoint = Mn::Vector3(pathfinder_->getRandomNavigablePoint());
-    // filter points that may be on the roof (TODO: this is a hack and islands
-    // may be better).
-    if (potentialPoint[1] > 1.0)
-      continue;
-    // try placing the object
-    physicsManager_->setTranslation(
-        objectId, potentialPoint + objectVerticalDisplacement);
-    float randAngle = ((rand() % 1000) / 1000.0) * M_PI * 2.0;
-    // Magnum::Matrix4 randRotation =
-    //     Magnum::Matrix4::rotationY(Magnum::Math::Rad<float>(randAngle));
-    // physicsManager_->setRotation(
-    //     objectId, Magnum::Quaternion::fromMatrix(randRotation.rotation()));
-
-    // test contact
-    validPlacement = !physicsManager_->contactTest(objectId);
-    attempt++;
-  }
-  if (true || !validPlacement) {
-    // physicsManager_->setTransformation(objectId, originalTransformation);
-    Corrade::Utility::Debug()
-        << "Viewer::placeObject found NO VALID PLACEMENT in " << attempt
-        << "attempts. Resetting the object.";
-  } else {
-    Corrade::Utility::Debug()
-        << "Viewer::placeObject found a valid placement in " << attempt
-        << "attempts.";
-  }
-  return validPlacement;
-}
-
 Magnum::Matrix4 gripOffset;
 int grippedObjectId = -1;
 
@@ -533,7 +481,7 @@ void Viewer::grabReleaseObject() {
     
     physicsManager_->setObjectMotionType(grippedObjectId,
         esp::physics::MotionType::STATIC);
-    physicsManager_->setActive(agentObjectId, true);
+    //physicsManager_->setActive(agentObjectId, true);
     grippedObjectId = -1;
   } else if (nearestObjId != -1) {
     // not gripped, so grip it

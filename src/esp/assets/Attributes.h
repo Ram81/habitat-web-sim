@@ -264,34 +264,6 @@ class PhysicsObjectAttributes : public AbstractPhysicsAttributes {
   }
   double getAngularDamping() const { return getDouble("angularDamping"); }
 
-  void setOriginHandle(const std::string& originHandle) {
-    setString("originHandle", originHandle);
-  }
-  
-  std::string getOriginHandle() const { return getString("originHandle"); }
-
-  void setRenderMeshHandle(const std::string& renderMeshHandle) {
-    setString("renderMeshHandle", renderMeshHandle);
-  }
-
-  std::string getRenderMeshHandle() const {
-    return getString("renderMeshHandle");
-  }
-
-  void setCollisionMeshHandle(const std::string& collisionMeshHandle) {
-    setString("collisionMeshHandle", collisionMeshHandle);
-  }
-
-  std::string getCollisionMeshHandle() const {
-    return getString("collisionMeshHandle");
-  }
-
-  void setObjectTemplateID(int objectTemplateID) {
-    setInt("objectTemplateID", objectTemplateID);
-  }
-
-  int getObjectTemplateID() const { return getInt("objectTemplateID"); }
-
   // if true override other settings and use render mesh bounding box as
   // collision object
   void setBoundingBoxCollisions(bool useBoundingBoxForCollision) {
