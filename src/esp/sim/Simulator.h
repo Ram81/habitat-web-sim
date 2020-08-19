@@ -749,6 +749,8 @@ class Simulator {
 
   Magnum::Vector3 getAgentAbsoluteTranslation(int agentId);
 
+  bool sampleObjectState(int objectID, int sceneID);
+
   /**
    * @brief Getter for PRNG.
    *
