@@ -790,6 +790,8 @@ class Simulator {
   Magnum::Vector3 getBulletTranslation(const int objectID,
                                        const int sceneID = 0);
 
+  void clearRecycledObjectIds();
+
   /**
    * @brief Getter for PRNG.
    *
