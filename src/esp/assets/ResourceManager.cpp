@@ -939,6 +939,9 @@ bool ResourceManager::loadGeneralMeshData(
   const bool fileIsLoaded = resourceDict_.count(filename) > 0;
   const bool drawData = parent != nullptr && drawables != nullptr;
 
+  LOG(WARNING) << "RM file loaded: " << filename << " -- " << fileIsLoaded
+               << " -- " << drawData;
+
   // Preferred plugins, Basis target GPU format
   importerManager_.setPreferredPlugins("GltfImporter", {"TinyGltfImporter"});
 #ifdef ESP_BUILD_ASSIMP_SUPPORT
