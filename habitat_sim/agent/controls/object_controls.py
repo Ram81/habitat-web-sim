@@ -53,7 +53,7 @@ class ObjectControls(object):
         :param action_name: Name of the action
         """
         move_fn = registry.get_move_fn(action_name)
-        # assert move_fn is not None, f"No move_fn for action '{action_name}'"
+        assert move_fn is not None, f"No interact_fn for action '{action_name}'"
 
         return move_fn.interact_action
 
@@ -104,7 +104,7 @@ class ObjectControls(object):
         if move_fn_dict is None:
             return result["collided"]
         result.update(move_fn_dict)
-        return result
+        return result["collided"]
 
     def __call__(
         self,
