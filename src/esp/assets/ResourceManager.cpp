@@ -1072,6 +1072,11 @@ bool ResourceManager::loadGeneralMeshData(
     LOG(ERROR) << "Reloading asset " << filename
                << " with different configuration not currently supported. "
                << "Asset may not be rendered correctly.";
+    auto lInfo = resourceDict_[filename].assetInfo;
+
+    // LOG(WARNING) <<"assetInfor" << lInfo.filepath << "-" <<
+    // lInfo.requiresLighting << "-" <<lInfo.frame; LOG(WARNING) <<"info" <<
+    // .filepath << "-" << info.requiresLighting <<"-" <<info.frame;
   }
 
   // Optional Instantiation
