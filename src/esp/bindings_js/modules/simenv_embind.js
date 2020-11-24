@@ -72,7 +72,6 @@ class SimEnv {
    * @param {Object} episode - episode config
    */
   setEpisode(episode = {}) {
-    console.log(episode);
     this.removeAllObjects();
     this.episode = episode;
     this.initialAgentState = null;
