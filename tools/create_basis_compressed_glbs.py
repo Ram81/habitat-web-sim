@@ -37,7 +37,7 @@ def build_parser(
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
 
-    parser.add_argument("basedir", type=str, help="Base directory to find GLBs in.")
+    parser.add_argument("--basedir", type=str, help="Base directory to find GLBs in.")
 
     parser.add_argument(
         "--num-workers",
@@ -241,7 +241,7 @@ def main():
             "This tool is currently designed to be run in the habitat-sim repo with submodules cloned."
         )
 
-    files = glob.glob(osp.join(args.basedir, "**", "*.glb"), recursive=True)
+    files = glob.glob(osp.join(args.basedir, "*.glb"), recursive=False)
     files = [f for f in files if ".basis." not in f]
     files = [f for f in files if "_convex" not in f]
 

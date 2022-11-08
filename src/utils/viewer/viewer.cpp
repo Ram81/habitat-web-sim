@@ -197,6 +197,45 @@ struct MouseGrabber {
   }
 };
 
+namespace HabOnWeb {
+
+struct Sensor {
+  Mn::Vector3 translation;
+  Mn::Quaternion rotation;
+};
+
+struct SensorData {
+  Sensor rgb;
+  // don't bother reading semantic or depth
+};
+
+struct TrajectorySample {
+  Mn::Vector3 position;
+  Mn::Quaternion rotation;
+  SensorData sensorData;
+};
+
+inline bool fromJsonValue(const esp::io::JsonGenericValue& obj, Sensor& x) {
+  esp::io::readMember(obj, "translation", x.translation);
+  esp::io::readMember(obj, "rotation", x.rotation);
+  return true;
+}
+
+inline bool fromJsonValue(const esp::io::JsonGenericValue& obj, SensorData& x) {
+  esp::io::readMember(obj, "rgb", x.rgb);
+  return true;
+}
+
+inline bool fromJsonValue(const esp::io::JsonGenericValue& obj,
+                          TrajectorySample& x) {
+  esp::io::readMember(obj, "position", x.position);
+  esp::io::readMember(obj, "rotation", x.rotation);
+  esp::io::readMember(obj, "sensor_data", x.sensorData);
+  return true;
+}
+
+}  // namespace HabOnWeb
+
 class Viewer : public Mn::Platform::Application {
  public:
   explicit Viewer(const Arguments& arguments);
@@ -527,6 +566,42 @@ Key Commands:
     }
     esp::geo::clamp(agentTrajRad_, 0.001f, 1.0f);
     ESP_DEBUG() << "Agent Trajectory Radius" << mod << ":" << agentTrajRad_;
+  }
+
+  void drawHabOnWebTraj() {
+
+    std::vector<HabOnWeb::TrajectorySample> traj_;
+
+    const std::string filepath = "ur6pFq6Qu1A_human_trajectory.json";
+    if (filepath.empty()) {
+      return;
+    }
+    esp::io::JsonDocument d;
+    try {
+      d = esp::io::parseJsonFile(filepath);
+    } catch (...) {
+      ESP_DEBUG() << filepath << " parse failed";
+      return;
+    }
+
+    esp::io::readMember(d, "trajectory", traj_);
+
+     // draw line for HabOnWeb trajectory
+    {
+      const auto color =
+          Mn::Color4(1.f, 0.5, 0.0, 1.f);  // rgba, where a is opacity
+      simulator_->getDebugLineRender()->setLineWidth(5.0f);
+      Mn::Vector3 prevPt;
+      for (int i = 0; i < traj_.size(); i++) {
+        const auto& sample = traj_[i];
+        const Mn::Vector3& pt = sample.position;
+        if (i > 0) {
+          simulator_->getDebugLineRender()->drawLine(
+            prevPt, pt, color);
+        }
+        prevPt = pt;
+      }
+    }
   }
 
   esp::logging::LoggingContext loggingContext_;
@@ -1749,6 +1824,8 @@ void Viewer::drawEvent() {
 
   swapBuffers();
   timeline_.nextFrame();
+
+  drawHabOnWebTraj();
   redraw();
 }  // Viewer::drawEvent()
 
