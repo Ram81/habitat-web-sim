@@ -568,11 +568,11 @@ Key Commands:
     ESP_DEBUG() << "Agent Trajectory Radius" << mod << ":" << agentTrajRad_;
   }
 
-  void drawHabOnWebTraj() {
-
+  void drawHabOnWebSPTraj() {
     std::vector<HabOnWeb::TrajectorySample> traj_;
 
-    const std::string filepath = "ur6pFq6Qu1A_human_trajectory.json";
+    const std::string filepath =
+        "../il_rl_baselines/demos/overlayed/rl_ft_hd/demo_trajectory.json";
     if (filepath.empty()) {
       return;
     }
@@ -585,23 +585,139 @@ Key Commands:
     }
 
     esp::io::readMember(d, "trajectory", traj_);
+    std::vector<Mn::Color3> clrs;
 
-     // draw line for HabOnWeb trajectory
-    {
-      const auto color =
-          Mn::Color4(1.f, 0.5, 0.0, 1.f);  // rgba, where a is opacity
-      simulator_->getDebugLineRender()->setLineWidth(5.0f);
-      Mn::Vector3 prevPt;
-      for (int i = 0; i < traj_.size(); i++) {
-        const auto& sample = traj_[i];
-        const Mn::Vector3& pt = sample.position;
-        if (i > 0) {
-          simulator_->getDebugLineRender()->drawLine(
-            prevPt, pt, color);
-        }
-        prevPt = pt;
-      }
+    // draw line for HabOnWeb trajectory
+    const auto color =
+        Mn::Color4(1.f, 0.5, 0.5, 1.f);  // rgba, where a is opacity
+    clrs.push_back(Mn::Color3{1.f, 0.1, 0.0});
+    simulator_->getDebugLineRender()->setLineWidth(5.0f);
+    Mn::Vector3 prevPt;
+    std::vector<Mn::Vector3> points;
+    for (int i = 0; i < traj_.size(); i++) {
+      const auto& sample = traj_[i];
+      const Mn::Vector3& pt = sample.position;
+      prevPt = pt;
+      points.push_back(pt);
     }
+
+    std::string trajObjName = Cr::Utility::formatString(
+        "viewerTrajVis_R{}_G{}_B{}_clrs_{}_rad_{}_{}_pts", clrs[0].r(),
+        clrs[0].g(), clrs[0].b(), 1, 0.2f, points.size());
+
+    int trajObjID = simulator_->addTrajectoryObject(trajObjName, points, clrs,
+                                                    6, 0.1f, true, 10);
+  }
+
+  void drawHabOnWebFETraj() {
+    std::vector<HabOnWeb::TrajectorySample> traj_;
+
+    const std::string filepath =
+        "../il_rl_baselines/demos/overlayed/rl_ft_fe/demo_trajectory.json";
+    if (filepath.empty()) {
+      return;
+    }
+    esp::io::JsonDocument d;
+    try {
+      d = esp::io::parseJsonFile(filepath);
+    } catch (...) {
+      ESP_DEBUG() << filepath << " parse failed";
+      return;
+    }
+
+    esp::io::readMember(d, "trajectory", traj_);
+    std::vector<Mn::Color3> clrs;
+
+    // draw line for HabOnWeb trajectory
+    const auto color =
+        Mn::Color4(1.f, 0.5, 0.0, 1.f);  // rgba, where a is opacity
+    clrs.push_back(Mn::Color3{1.f, 0.5, 0.0});
+    simulator_->getDebugLineRender()->setLineWidth(5.0f);
+    Mn::Vector3 prevPt;
+    std::vector<Mn::Vector3> points;
+    for (int i = 0; i < traj_.size(); i++) {
+      const auto& sample = traj_[i];
+      const Mn::Vector3& pt = sample.position;
+      prevPt = pt;
+      points.push_back(pt);
+    }
+
+    std::string trajObjName = Cr::Utility::formatString(
+        "viewerTrajVis_R{}_G{}_B{}_clrs_{}_rad_{}_{}_pts", clrs[0].r(),
+        clrs[0].g(), clrs[0].b(), 1, 0.2f, points.size());
+
+    int trajObjID = simulator_->addTrajectoryObject(trajObjName, points, clrs,
+                                                    6, 0.1f, true, 10);
+  }
+
+  void drawHabOnWebRLTraj() {
+    std::vector<HabOnWeb::TrajectorySample> traj_;
+
+    // const std::string filepath =
+    // "../il_rl_baselines/demos/overlayed/rl_ft_fe/demo_trajectory.json";
+    const std::string filepath =
+        "../il_rl_baselines/demos/overlayed/il_hd/demo_trajectory.json";
+    if (filepath.empty()) {
+      return;
+    }
+    esp::io::JsonDocument d;
+    try {
+      d = esp::io::parseJsonFile(filepath);
+    } catch (...) {
+      ESP_DEBUG() << filepath << " parse failed";
+      return;
+    }
+
+    esp::io::readMember(d, "trajectory", traj_);
+    std::vector<Mn::Color3> clrs;
+
+    // draw line for HabOnWeb trajectory
+    const auto color =
+        Mn::Color4(1.f, 1.f, 0.0, 1.f);  // rgba, where a is opacity
+    clrs.push_back(Mn::Color3{0.f, 0.5f, 1.f});
+    simulator_->getDebugLineRender()->setLineWidth(5.0f);
+    Mn::Vector3 prevPt;
+    std::vector<Mn::Vector3> points;
+    for (int i = 0; i < traj_.size(); i++) {
+      const auto& sample = traj_[i];
+      const Mn::Vector3& pt = sample.position;
+      prevPt = pt;
+      points.push_back(pt);
+    }
+
+    std::string trajObjName = Cr::Utility::formatString(
+        "viewerTrajVis_R{}_G{}_B{}_clrs_{}_rad_{}_{}_pts", clrs[0].r(),
+        clrs[0].g(), clrs[0].b(), 1, 0.2f, points.size());
+
+    int trajObjID = simulator_->addTrajectoryObject(trajObjName, points, clrs,
+                                                    6, 0.1f, true, 10);
+  }
+
+  void getCameraPose() {
+    ESP_DEBUG() << "body" << agentBodyNode_->translation();
+    ESP_DEBUG() << "body" << agentBodyNode_->rotation();
+
+    ESP_DEBUG() << "cam: " << renderCamera_->node().translation();
+    ESP_DEBUG() << "cam: " << renderCamera_->node().rotation();
+  }
+
+  void setCameraPoseForScreenshot() {
+    // Mn::Vector3 pos{-10.0769, 0.0f, 11.1519};
+    // Mn::Quaternion rotation(Mn::Vector3{0.0, -0.404343, 0.0f}, 0.914607);
+
+    // Mn::Vector3 camPos{0.0f, 9.59825, -5.88372};
+    // Mn::Quaternion camRotation(Mn::Vector3{-0.502266, 0.0f, 0.0f}, 0.914607);
+    Mn::Vector3 pos{-11.6121, 0.0f, 10.1424};
+    Mn::Quaternion rotation(Mn::Vector3{0.0f, -0.45399, 0.0f}, 0.891007);
+
+    Mn::Vector3 camPos{0.0f, 10.651, -7.32156};
+    Mn::Quaternion camRotation(Mn::Vector3{-0.548642, 0.0f, 0.0f}, 0.836058);
+
+    renderCamera_->node().setRotation(camRotation);
+    renderCamera_->node().setTranslation(camPos);
+
+    agentBodyNode_->setRotation(rotation);
+    agentBodyNode_->setTranslation(pos);
   }
 
   esp::logging::LoggingContext loggingContext_;
@@ -1068,8 +1184,8 @@ Viewer::Viewer(const Arguments& arguments)
               Mn::GL::Extensions::ARB::pipeline_statistics_query>()) {
     profilerValues |=
         Mn::DebugTools::FrameProfilerGL::Value::
-            VertexFetchRatio |  // Ratio of vertex shader invocations to count
-                                // of vertices submitted
+            VertexFetchRatio |   // Ratio of vertex shader invocations to count
+                                 // of vertices submitted
         Mn::DebugTools::FrameProfilerGL::Value::
             PrimitiveClipRatio;  // Ratio of primitives discarded by the
                                  // clipping stage to count of primitives
@@ -1825,7 +1941,7 @@ void Viewer::drawEvent() {
   swapBuffers();
   timeline_.nextFrame();
 
-  drawHabOnWebTraj();
+  // drawHabOnWebTraj();
   redraw();
 }  // Viewer::drawEvent()
 
@@ -2328,6 +2444,11 @@ void Viewer::keyPressEvent(KeyEvent& event) {
     case KeyEvent::Key::Two:
       // agent motion trajectory mesh synthesis with random color
       buildTrajectoryVis();
+      drawHabOnWebSPTraj();
+      drawHabOnWebFETraj();
+      drawHabOnWebRLTraj();
+      getCameraPose();
+      setCameraPoseForScreenshot();
       break;
     case KeyEvent::Key::Three:
       // toggle between single color and multi-color trajectories

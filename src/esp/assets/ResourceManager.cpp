@@ -1950,7 +1950,7 @@ bool ResourceManager::buildTrajectoryVisualization(
   // default material for now
   auto phongMaterial = gfx::PhongMaterialData::create_unique();
   phongMaterial->specularColor = {1.0, 1.0, 1.0, 1.0};
-  phongMaterial->shininess = 160.f;
+  phongMaterial->shininess = 2000.f;
   phongMaterial->ambientColor = {1.0, 1.0, 1.0, 1.0};
   phongMaterial->perVertexObjectId = true;
 
